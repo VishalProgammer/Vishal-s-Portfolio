@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Feather, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Send, Feather, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+
+const WEB3FORMS_ACCESS_KEY = 'aa9cf493-d59f-4bf2-aa31-0dc31dd19a51';
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -12,6 +14,7 @@ export default function Contact() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const validate = () => {
     const tempErrors = {};
@@ -29,31 +32,51 @@ export default function Contact() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
+    if (submitError) setSubmitError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
-    
-    // Construct mailto link to send the email
-    const subject = formData.subject ? formData.subject : `Portfolio Message from ${formData.name}`;
-    const body = `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`;
-    const mailtoUrl = `mailto:vishalwriterofficial@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    
-    window.location.href = mailtoUrl;
+    setSubmitError('');
 
-    // Simulate parchment transmission (1.5s delay)
-    setTimeout(() => {
+    try {
+      const payload = {
+        access_key: WEB3FORMS_ACCESS_KEY,
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject || `Portfolio Message from ${formData.name}`,
+        message: formData.message,
+        from_name: 'Vishal Portfolio — Contact Form',
+      };
+
+      const response = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setIsSubmitted(true);
+        setFormData({ name: '', email: '', subject: '', message: '' });
+      } else {
+        setSubmitError(data.message || 'Something went wrong. Please try again.');
+      }
+    } catch (err) {
+      setSubmitError('Failed to send your letter. Please check your connection and try again.');
+    } finally {
       setIsSubmitting(false);
-      setIsSubmitted(true);
-      setFormData({ name: '', email: '', subject: '', message: '' });
-    }, 1800);
+    }
   };
 
   return (
@@ -175,6 +198,18 @@ export default function Contact() {
                     </span>
                   )}
                 </div>
+
+                {/* Global Error Message */}
+                {submitError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3"
+                  >
+                    <XCircle size={16} className="shrink-0" />
+                    <span>{submitError}</span>
+                  </motion.div>
+                )}
 
                 {/* Submit Button */}
                 <div className="pt-6 flex justify-end">
