@@ -7,7 +7,7 @@ import {
 import { fetchSampleLinks, fallbackData } from '../utils/linksParser';
 import GlobalCTA from '../components/GlobalCTA';
 
-const videoCategories = ['All', 'Commercial Ads', 'Podcasts', 'Explainer Reels', 'Vlogs'];
+const videoCategories = ['All', 'Shorts / Reels', 'Long Videos'];
 
 export default function VideoEditing({ onOpenQuote }) {
   const [videos, setVideos] = useState(fallbackData.videoEdits);
@@ -34,7 +34,7 @@ export default function VideoEditing({ onOpenQuote }) {
   // Filter videos based on category
   const filteredVideos = activeCategory === 'All'
     ? videos
-    : videos.filter((v) => v.category === activeCategory);
+    : videos.filter((v) => v.videoType === activeCategory);
 
   // Close modal with Escape key
   useEffect(() => {

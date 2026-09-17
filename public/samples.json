@@ -1,0 +1,45 @@
+{
+  "videoEdits": {
+    "shorts_reels": [
+      {
+        "title": "Music video sample",
+        "url": "https://youtube.com/shorts/fzaBAwNliFk?feature=share"
+      },
+      {
+        "title": "Coffee Ad sample",
+        "url": "https://youtube.com/shorts/tIyLS4uGsts?feature=share"
+      },
+      {
+        "title": "podcast short sample",
+        "url": "https://youtube.com/shorts/yuqc8UF-jHk?feature=share"
+      },
+      {
+        "title": "explainer reel sample",
+        "url": "https://youtube.com/shorts/mp7ESEZrQPI?feature=share"
+      },
+      {
+        "title": "simple vlog reel sample",
+        "url": "https://youtube.com/shorts/vLFxo2ftnok?feature=share"
+      }
+    ],
+    "long_videos": []
+  },
+  "voiceOvers": [
+    {
+      "title": "hindi voice over samples",
+      "url": "https://soundcloud.com/daisuke-801945923/hindi-samples"
+    },
+    {
+      "title": "hindi narration",
+      "url": "https://soundcloud.com/daisuke-801945923/hindi-narration"
+    },
+    {
+      "title": "english ad sample",
+      "url": "https://soundcloud.com/daisuke-801945923/coffee-ad-sample"
+    },
+    {
+      "title": "English dubbing",
+      "url": "https://soundcloud.com/daisuke-801945923/dubbing-eng"
+    }
+  ]
+}

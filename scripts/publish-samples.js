@@ -2,25 +2,30 @@
 /**
  * publish-samples.js
  * ------------------
- * One-command automation:
- *   1. Copies "Video edit and VO Samples.txt" -> "links.txt" (auto-sync)
- *   2. Validates that at least one link exists
- *   3. Stages all changed source files
- *   4. Commits with an auto-generated message
- *   5. Pushes to GitHub
+ * Interactive CLI to add samples to samples.json and push to GitHub.
  *
- * Usage:  npm run publish-samples
+ * Usage:
+ *   npm run publish-samples              (interactive: asks title, URL, type)
+ *   npm run publish-samples -- --push    (just commit + push current changes)
+ *
+ * Flow:
+ *   1. Asks: Type? (video / voiceover)
+ *   2. If video -> Asks: Category? (Shorts/Reels or Long Videos)
+ *   3. Asks: Title
+ *   4. Asks: URL
+ *   5. Asks: Add another? (y/n)
+ *   6. Auto-commits and pushes to GitHub
  */
 
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const SAMPLES_FILE = path.join(ROOT, 'public', 'Video edit and VO Samples.txt');
-const LINKS_FILE = path.join(ROOT, 'public', 'links.txt');
+const SAMPLES_FILE = path.join(ROOT, 'public', 'samples.json');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,20 +34,18 @@ function run(cmd, label) {
   execSync(cmd, { cwd: ROOT, stdio: 'inherit' });
 }
 
-function countLinks(text) {
-  return (text.match(/https?:\/\//g) || []).length;
+function loadSamples() {
+  if (!fs.existsSync(SAMPLES_FILE)) {
+    return {
+      videoEdits: { shorts_reels: [], long_videos: [] },
+      voiceOvers: []
+    };
+  }
+  return JSON.parse(fs.readFileSync(SAMPLES_FILE, 'utf-8'));
 }
 
-function listEntries(text) {
-  const entries = [];
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line.includes('http')) continue;
-    const dashIdx = line.search(/ - https?:\/\//);
-    const title = dashIdx !== -1 ? line.slice(0, dashIdx).trim() : line;
-    entries.push(title);
-  }
-  return entries;
+function saveSamples(data) {
+  fs.writeFileSync(SAMPLES_FILE, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 function hasUnstagedChanges() {
@@ -54,60 +57,157 @@ function hasUnstagedChanges() {
   }
 }
 
+function countAllLinks(data) {
+  const vids = (data.videoEdits?.shorts_reels?.length || 0)
+             + (data.videoEdits?.long_videos?.length || 0);
+  const vos = data.voiceOvers?.length || 0;
+  return vids + vos;
+}
+
+// ─── readline prompt ─────────────────────────────────────────────────────────
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+function ask(question) {
+  return new Promise(resolve => rl.question(question, resolve));
+}
+
+function choose(question, options) {
+  return new Promise(async (resolve) => {
+    console.log(`\n${question}`);
+    options.forEach((opt, i) => console.log(`  ${i + 1}. ${opt}`));
+    while (true) {
+      const ans = await ask(`Enter choice (1-${options.length}): `);
+      const idx = parseInt(ans, 10) - 1;
+      if (idx >= 0 && idx < options.length) {
+        resolve({ index: idx, value: options[idx] });
+        return;
+      }
+      console.log('  Invalid choice, try again.');
+    }
+  });
+}
+
 // ─── main ────────────────────────────────────────────────────────────────────
 
-console.log('\n===============================================');
-console.log('  PUBLISH SAMPLES  |  Portfolio Automation');
-console.log('===============================================');
+async function main() {
+  console.log('\n===============================================');
+  console.log('  PUBLISH SAMPLES  |  Portfolio Automation');
+  console.log('===============================================');
 
-// 1. Validate samples file exists
-if (!fs.existsSync(SAMPLES_FILE)) {
-  console.error(`\nERROR: Samples file not found at:\n  ${SAMPLES_FILE}`);
-  console.error('Create the file and paste your sample links, then re-run.\n');
+  // --push flag: just commit and push without adding new samples
+  if (process.argv.includes('--push')) {
+    if (!hasUnstagedChanges()) {
+      console.log('\nNothing to commit. Add new samples first.\n');
+      process.exit(0);
+    }
+    commitAndPush();
+    process.exit(0);
+  }
+
+  const data = loadSamples();
+  let addedCount = 0;
+
+  // Loop: keep adding samples
+  while (true) {
+    const { index: typeIdx } = await choose('What type of sample?', [
+      'Video Edit',
+      'Voiceover'
+    ]);
+
+    if (typeIdx === 0) {
+      // Video
+      const { index: catIdx } = await choose('Video category?', [
+        'Shorts / Reels  (vertical 9:16)',
+        'Long Videos      (widescreen 16:9)'
+      ]);
+
+      const title = (await ask('\nSample title: ')).trim();
+      if (!title) { console.log('  Skipped (empty title).'); continue; }
+
+      const url = (await ask('Paste URL: ')).trim();
+      if (!url || !url.startsWith('http')) { console.log('  Skipped (invalid URL).'); continue; }
+
+      const bucket = catIdx === 0 ? 'shorts_reels' : 'long_videos';
+
+      // Check duplicate
+      const exists = data.videoEdits[bucket].some(e => e.url === url);
+      if (exists) {
+        console.log('  WARNING: This URL already exists. Skipping duplicate.');
+        continue;
+      }
+
+      data.videoEdits[bucket].push({ title, url });
+      addedCount++;
+      console.log(`  Added "${title}" to ${catIdx === 0 ? 'Shorts/Reels' : 'Long Videos'}`);
+
+    } else {
+      // Voiceover
+      const title = (await ask('\nSample title: ')).trim();
+      if (!title) { console.log('  Skipped (empty title).'); continue; }
+
+      const url = (await ask('Paste URL: ')).trim();
+      if (!url || !url.startsWith('http')) { console.log('  Skipped (invalid URL).'); continue; }
+
+      const exists = data.voiceOvers.some(e => e.url === url);
+      if (exists) {
+        console.log('  WARNING: This URL already exists. Skipping duplicate.');
+        continue;
+      }
+
+      data.voiceOvers.push({ title, url });
+      addedCount++;
+      console.log(`  Added "${title}" to Voiceovers`);
+    }
+
+    // Ask to add more
+    const more = (await ask('\nAdd another sample? (y/n): ')).trim().toLowerCase();
+    if (more !== 'y' && more !== 'yes') break;
+  }
+
+  rl.close();
+
+  if (addedCount === 0) {
+    console.log('\nNo samples added. Exiting.\n');
+    process.exit(0);
+  }
+
+  // Save
+  saveSamples(data);
+  const total = countAllLinks(data);
+  console.log(`\nSaved ${addedCount} new sample(s) to samples.json (${total} total).`);
+
+  // Commit and push
+  commitAndPush(addedCount);
+}
+
+function commitAndPush(addedCount) {
+  run('git add -A', 'Staging all changes...');
+
+  const now = new Date();
+  const timestamp = now.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  });
+
+  const msg = addedCount
+    ? `feat: add ${addedCount} new sample(s) - ${timestamp}`
+    : `chore: update samples - ${timestamp}`;
+
+  run(`git commit -m "${msg}"`, `Committing: "${msg}"`);
+  run('git push', 'Pushing to GitHub...');
+
+  console.log('\n===============================================');
+  console.log('  DONE! Your samples are now live on GitHub.');
+  console.log('===============================================\n');
+}
+
+main().catch(err => {
+  console.error('\nFailed:', err.message);
+  rl.close();
   process.exit(1);
-}
-
-// 2. Read and validate
-const text = fs.readFileSync(SAMPLES_FILE, 'utf-8');
-const linkCount = countLinks(text);
-
-if (linkCount === 0) {
-  console.error('\nERROR: No links found in "Video edit and VO Samples.txt".');
-  console.error('Paste at least one URL and re-run.\n');
-  process.exit(1);
-}
-
-const titles = listEntries(text);
-console.log(`\nFound ${linkCount} sample link(s):`);
-titles.forEach(t => console.log(`  - ${t}`));
-
-// 3. Auto-sync: copy samples file -> links.txt (so the website picks it up)
-fs.copyFileSync(SAMPLES_FILE, LINKS_FILE);
-console.log('\n> Synced "Video edit and VO Samples.txt" -> "links.txt"');
-
-// 4. Check if there is anything to commit
-if (!hasUnstagedChanges()) {
-  console.log('\nNothing to commit — no changes since last push.');
-  console.log('Add new links to "Video edit and VO Samples.txt" and re-run.\n');
-  process.exit(0);
-}
-
-// 5. Stage all changes
-run('git add -A', 'Staging all changes...');
-
-// 6. Auto commit message with IST timestamp
-const now = new Date();
-const timestamp = now.toLocaleString('en-IN', {
-  timeZone: 'Asia/Kolkata',
-  day: '2-digit', month: 'short', year: 'numeric',
-  hour: '2-digit', minute: '2-digit', hour12: true
 });
-const commitMsg = `feat: update samples (${linkCount} total) - ${timestamp}`;
-run(`git commit -m "${commitMsg}"`, `Committing: "${commitMsg}"`);
-
-// 7. Push
-run('git push', 'Pushing to GitHub...');
-
-console.log('\n===============================================');
-console.log('  DONE! Your samples are now live on GitHub.');
-console.log('===============================================\n');
