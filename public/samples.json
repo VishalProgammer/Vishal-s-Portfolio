@@ -22,7 +22,12 @@
         "url": "https://youtube.com/shorts/vLFxo2ftnok?feature=share"
       }
     ],
-    "long_videos": []
+    "long_videos": [
+      {
+        "title": "Gaming Faceless Video Sample",
+        "url": "https://youtu.be/OaTHoNtQgVc"
+      }
+    ]
   },
   "voiceOvers": [
     {
